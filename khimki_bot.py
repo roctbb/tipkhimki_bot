@@ -51,7 +51,7 @@ def watcher_in_the_sky():
     global message_storage
     while True:
         for user in message_storage:
-            if message_storage[user]['messages'] and abs(message_storage[user]["last_time"] - time.time()) > 3 * 60:
+            if message_storage[user]['messages'] and abs(message_storage[user]["last_time"] - time.time()) > 2 * 60:
                 for message_id in message_storage[user]['messages']:
                     for admin_id in admin_ids:
                         bot.forward_message(admin_id, user, message_id)
