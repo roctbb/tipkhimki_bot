@@ -16,8 +16,8 @@ message_storage = {}
 def safe_send(to, m):
     try:
         bot.send_message(to, m)
-    except:
-        pass
+    except Exception as e:
+        print("Message error:", e)
 
 def init_storage(message):
     if message.chat.id not in message_storage:
@@ -50,13 +50,16 @@ def text_handler(message):
 def watcher_in_the_sky():
     global message_storage
     while True:
-        for user in message_storage:
-            if message_storage[user]['messages'] and abs(message_storage[user]["last_time"] - time.time()) > 2 * 60:
-                for message_id in message_storage[user]['messages']:
-                    for admin_id in admin_ids:
-                        bot.forward_message(admin_id, user, message_id)
-                message_storage[user]['messages'] = []
-                safe_send(user, thanks_text)
+        try:
+            for user in message_storage:
+                if message_storage[user]['messages'] and abs(message_storage[user]["last_time"] - time.time()) > 2 * 60:
+                    for message_id in message_storage[user]['messages']:
+                        for admin_id in admin_ids:
+                            bot.forward_message(admin_id, user, message_id)
+                    message_storage[user]['messages'] = []
+                    safe_send(user, thanks_text)
+        except Exception as e:
+            print("Thread exception:", e)
         time.sleep(60)
 
 t = Thread(target=watcher_in_the_sky)
@@ -65,5 +68,5 @@ t.start()
 while True:
     try:
         bot.polling(none_stop=True)
-    except:
-        pass
+    except Exception as e:
+        print("General exception:", e)
