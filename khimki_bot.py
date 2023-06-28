@@ -57,7 +57,10 @@ def watcher_in_the_sky():
                 if message_storage[user]['messages'] and abs(message_storage[user]["last_time"] - time.time()) > 2 * 60:
                     for message_id in message_storage[user]['messages']:
                         for admin_id in admin_ids:
-                            bot.forward_message(admin_id, user, message_id)
+                            try:
+                                bot.forward_message(admin_id, user, message_id)
+                            except:
+                                pass
                     message_storage[user]['messages'] = []
                     safe_send(user, thanks_text)
         except Exception as e:
