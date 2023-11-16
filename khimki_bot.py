@@ -9,15 +9,21 @@ welcome_text = """Привет! Есть что-то интересное про
 
 P.S. Объявления про потерянные вещи или животных не публикуем."""
 
-thanks_text = """Большое спасибо! Наши администраторы всё посмотрят и опубликуют! Если не опубликовали, пожалуйста, не обижайтесь :) P.S. Как будут еще новости - сразу же присылайте!
+thanks_text = """Большое спасибо! 
+Если вы прислали *новость*, а не объявление или рекламу, админы всё посмотрят и опубликуют! Если не опубликовали, пожалуйста, не обижайтесь :)
 
-(Это автоматическое сообщение, на него не обязательно отвечать)"""
+Как будут еще новости - сразу же присылайте!
+
+P.S. *Потерянные вещи / животных не публикуем!* По рекламе писать админу, а не сюда (ссылка на видном месте в инфо канала).
+
+
+_Это автоматическое сообщение, на него не нужно отвечать._"""
 
 message_storage = {}
 
-def safe_send(to, m):
+def safe_send(to, m, parse_mode=None):
     try:
-        bot.send_message(to, m)
+        bot.send_message(to, m, parse_mode)
     except Exception as e:
         print("Message error:", e)
 
@@ -62,7 +68,7 @@ def watcher_in_the_sky():
                             except:
                                 pass
                     message_storage[user]['messages'] = []
-                    safe_send(user, thanks_text)
+                    safe_send(user, thanks_text, parse_mode='MarkdownV2')
         except Exception as e:
             print("Thread exception:", e)
         time.sleep(60)
