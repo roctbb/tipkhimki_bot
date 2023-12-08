@@ -37,7 +37,7 @@ def init_storage(message):
 
 @bot.message_handler(commands=['alive'])
 def start(message):
-    safe_send(message.chat.id, "yep")
+    safe_send(message.chat.id, f"yep, {message.chat.id}")
 
 
 @bot.message_handler(commands=['start', 'help'])
