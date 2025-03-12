@@ -60,7 +60,7 @@ def watcher_in_the_sky():
     while True:
         try:
             for user in message_storage:
-                if message_storage[user]['messages'] and abs(message_storage[user]["last_time"] - time.time()) > 30:
+                if message_storage[user]['messages'] and abs(message_storage[user]["last_time"] - time.time()) > 2 * 60:
                     for message_id in message_storage[user]['messages']:
                         for admin_id in admin_ids:
                             try:
