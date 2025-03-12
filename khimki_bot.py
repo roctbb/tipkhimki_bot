@@ -50,9 +50,9 @@ def start(message):
 @bot.message_handler(content_types=['text', 'video', 'photo', 'voice', 'audio', 'document', 'video', 'video_note'])
 def text_handler(message):
     init_storage(message)
-
-    message_storage[message.chat.id]['messages'].append(message.message_id)
-    message_storage[message.chat.id]["last_time"] = time.time()
+    if message.chat.id not in [7901962333]:
+        message_storage[message.chat.id]['messages'].append(message.message_id)
+        message_storage[message.chat.id]["last_time"] = time.time()
 
 
 def watcher_in_the_sky():
