@@ -64,6 +64,7 @@ def watcher_in_the_sky():
                     for message_id in message_storage[user]['messages']:
                         for admin_id in admin_ids:
                             try:
+                                bot.send_message(admin_id, f"User ID: {user}")
                                 bot.forward_message(admin_id, user, message_id)
                             except:
                                 pass
