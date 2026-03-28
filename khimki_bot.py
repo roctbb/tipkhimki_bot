@@ -40,7 +40,7 @@ def init_storage(message):
 
 @bot.message_handler(commands=['alive'])
 def start(message):
-    safe_send(message.chat.id, "yep")
+    safe_send(message.chat.id, f"yep, {message.chat.id}")
 
 
 @bot.message_handler(commands=['start', 'help'])
@@ -53,9 +53,9 @@ def start(message):
 @bot.message_handler(content_types=['text', 'video', 'photo', 'voice', 'audio', 'document', 'video', 'video_note'])
 def text_handler(message):
     init_storage(message)
-
-    message_storage[message.chat.id]['messages'].append(message.message_id)
-    message_storage[message.chat.id]["last_time"] = time.time()
+    if message.chat.id not in [7901962333]:
+        message_storage[message.chat.id]['messages'].append(message.message_id)
+        message_storage[message.chat.id]["last_time"] = time.time()
 
 
 def watcher_in_the_sky():
@@ -67,9 +67,10 @@ def watcher_in_the_sky():
                     for message_id in message_storage[user]['messages']:
                         for admin_id in admin_ids:
                             try:
+                                bot.send_message(admin_id, f"User ID: {user}")
                                 bot.forward_message(admin_id, user, message_id)
-                            except:
-                                pass
+                            except Exception as e:
+                                print(e)
                     message_storage[user]['messages'] = []
                     safe_send(user, thanks_text, parse_mode='MarkdownV2')
         except Exception as e:
