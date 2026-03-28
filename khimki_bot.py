@@ -1,7 +1,10 @@
-from telebot import TeleBot
-from config import token, admin_ids
+from telebot import TeleBot, apihelper
+from config import token, admin_ids, proxy
 import time
 from threading import Thread
+
+if proxy:
+    apihelper.proxy = {'https': proxy}
 
 bot = TeleBot(token=token)
 
