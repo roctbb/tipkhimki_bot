@@ -1,87 +1,85 @@
+"""Application entry point. Importing modules never starts polling."""
+
+import fcntl
+import logging
+import signal
+from contextlib import contextmanager
+from threading import Event
+
+from requests import RequestException
 from telebot import TeleBot, apihelper
-from config import token, admin_ids, proxy
-import time
-from threading import Thread
 
-if proxy:
-    apihelper.proxy = {'https': proxy}
-
-bot = TeleBot(token=token)
-
-welcome_text = """Привет! Есть что-то интересное про Химки? Присылай сюда!
-
-P.S. Объявления про потерянные вещи или животных не публикуем."""
-
-thanks_text = """Большое спасибо\! 
-Если вы прислали *новость*, а не объявление или рекламу, админы всё посмотрят и опубликуют\! Если не опубликовали, пожалуйста, не обижайтесь :\)
-
-Как будут еще новости \- сразу же присылайте\!
-
-P\.S\. *Потерянные вещи / животных не публикуем\!* По рекламе писать админу, а не сюда \(ссылка на видном месте в инфо канала\)\.
+from bot_service import BotService
+from delivery import Dispatcher, describe_error
+from settings import Settings
+from storage import Store
 
 
-_Это автоматическое сообщение, на него не нужно отвечать\._"""
-
-message_storage = {}
-
-def safe_send(to, m, parse_mode=None):
-    try:
-        bot.send_message(to, m, parse_mode)
-    except Exception as e:
-        print("Message error:", e)
-
-def init_storage(message):
-    if message.chat.id not in message_storage:
-        message_storage[message.chat.id] = {
-            "messages": [],
-            "last_time": time.time()
-        }
+logger = logging.getLogger(__name__)
 
 
-@bot.message_handler(commands=['alive'])
-def start(message):
-    safe_send(message.chat.id, f"yep, {message.chat.id}")
-
-
-@bot.message_handler(commands=['start', 'help'])
-def start(message):
-    print(message.chat.id)
-    safe_send(message.chat.id, welcome_text)
-    init_storage(message)
-
-
-@bot.message_handler(content_types=['text', 'video', 'photo', 'voice', 'audio', 'document', 'video', 'video_note'])
-def text_handler(message):
-    init_storage(message)
-    if message.chat.id not in [7901962333]:
-        message_storage[message.chat.id]['messages'].append(message.message_id)
-        message_storage[message.chat.id]["last_time"] = time.time()
-
-
-def watcher_in_the_sky():
-    global message_storage
-    while True:
+@contextmanager
+def instance_lock(database_path):
+    """Prevent two workers from sending the same database's pending jobs."""
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(str(database_path) + '.lock', 'a') as lock:
         try:
-            for user in message_storage:
-                if message_storage[user]['messages'] and abs(message_storage[user]["last_time"] - time.time()) > 2 * 60:
-                    for message_id in message_storage[user]['messages']:
-                        for admin_id in admin_ids:
-                            try:
-                                bot.send_message(admin_id, f"User ID: {user}")
-                                bot.forward_message(admin_id, user, message_id)
-                            except Exception as e:
-                                print(e)
-                    message_storage[user]['messages'] = []
-                    safe_send(user, thanks_text, parse_mode='MarkdownV2')
-        except Exception as e:
-            print("Thread exception:", e)
-        time.sleep(60)
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError('Another bot process already uses this database') from None
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
-t = Thread(target=watcher_in_the_sky)
-t.start()
 
-while True:
-    try:
-        bot.polling(none_stop=True)
-    except Exception as e:
-        print("General exception:", e)
+def poll(bot, service, dispatcher, stop):
+    while not stop.is_set():
+        try:
+            dispatcher.drain(stopped=stop.is_set)
+            if stop.is_set():
+                break
+            updates = bot.get_updates(
+                offset=service.store.cursor() + 1,
+                timeout=15,
+                long_polling_timeout=10,
+                allowed_updates=['message'],
+            )
+            for update in updates:
+                if stop.is_set():
+                    break
+                service.handle_update(update)
+        except (apihelper.ApiException, RequestException) as exc:
+            logger.warning('Telegram connection: %s', describe_error(exc))
+            if isinstance(exc, apihelper.ApiTelegramException) and exc.error_code in (401, 409):
+                raise RuntimeError('Invalid bot token, active webhook, or another polling instance') from None
+            delay = 5
+            if isinstance(exc, apihelper.ApiTelegramException) and exc.error_code == 429:
+                delay = max(delay, exc.result_json.get('parameters', {}).get('retry_after', delay))
+            stop.wait(delay)
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    settings = Settings.load()
+    apihelper.CONNECT_TIMEOUT = 10
+    apihelper.READ_TIMEOUT = 20
+    apihelper.proxy = {'https': settings.proxy} if settings.proxy else None
+    bot = TeleBot(settings.token, threaded=False)
+    stop = Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: stop.set())
+    with instance_lock(settings.database_path):
+        initial_blocks = tuple(uid for uid in settings.initial_blocked_ids if uid not in settings.admin_ids)
+        store = Store(settings.database_path, initial_blocks)
+        try:
+            logger.info('Bot started; administrators: %d', len(settings.admin_ids))
+            poll(bot, BotService(store, settings), Dispatcher(bot, store, settings.admin_ids), stop)
+        finally:
+            store.close()
+            bot.stop_bot()
+            logger.info('Bot stopped')
+
+
+if __name__ == '__main__':
+    main()
